@@ -17,9 +17,9 @@ services:
       JWT_EXPIRATION: 86400000
       DISCORD_CLIENT_ID: ${DISCORD_CLIENT_ID}
       DISCORD_CLIENT_SECRET: ${DISCORD_CLIENT_SECRET}
-      BASE_URL: https://hyfata.kr
-      CORS_ALLOWED_ORIGINS: https://hyfata.kr
-      WEBSOCKET_ALLOWED_ORIGINS: https://hyfata.kr
+      BASE_URL: https://hyfata.kr/hyterium/api
+      CORS_ALLOWED_ORIGINS: https://hyfata.kr/hyterium/api
+      WEBSOCKET_ALLOWED_ORIGINS: https://hyfata.kr/hyterium/api
     ports:
       - "9000:8080"
     networks:
@@ -37,16 +37,16 @@ services:
       context: ./frontend
       dockerfile: Dockerfile
       args:
-        NEXT_PUBLIC_API_URL: https://hyfata.kr/hyterium/api
-        NEXT_PUBLIC_WS_URL: https://hyfata.kr/hyterium/api/ws
+        NEXT_PUBLIC_API_URL: https://hyfata.kr/hyterium
+        NEXT_PUBLIC_WS_URL: https://hyfata.kr/hyterium/ws
     container_name: notion-clone-frontend
     restart: unless-stopped
     depends_on:
       - backend
     environment:
       NODE_ENV: production
-      NEXT_PUBLIC_API_URL: https://hyfata.kr/hyterium/api
-      NEXT_PUBLIC_WS_URL: https://hyfata.kr/hyterium/api/ws
+      NEXT_PUBLIC_API_URL: https://hyfata.kr/hyterium
+      NEXT_PUBLIC_WS_URL: https://hyfata.kr/hyterium/ws
     ports:
       - "3020:3000"
     networks:
