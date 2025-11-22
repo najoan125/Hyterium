@@ -14,8 +14,8 @@ import org.springframework.web.util.UriComponentsBuilder
 class OAuth2AuthenticationSuccessHandler(
     private val jwtUtils: JwtUtils,
     private val userService: UserService,
-    @Value("\${cors.allowed-origins}")
-    private val allowedOrigins: String
+    @Value("\${base.url}")
+    private val baseUrl: String
 ) : SimpleUrlAuthenticationSuccessHandler() {
 
     override fun onAuthenticationSuccess(
@@ -43,8 +43,7 @@ class OAuth2AuthenticationSuccessHandler(
 
         val token = jwtUtils.generateToken(user.id!!, user.discordId, user.email)
 
-        val frontendUrl = allowedOrigins.split(",").first()
-        val targetUrl = UriComponentsBuilder.fromUriString(frontendUrl)
+        val targetUrl = UriComponentsBuilder.fromUriString(baseUrl)
             .path("/auth/callback")
             .queryParam("token", token)
             .build()

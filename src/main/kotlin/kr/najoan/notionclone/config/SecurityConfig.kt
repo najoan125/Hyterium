@@ -3,6 +3,7 @@ package kr.najoan.notionclone.config
 import kr.najoan.notionclone.security.JwtAuthenticationFilter
 import kr.najoan.notionclone.security.OAuth2AuthenticationSuccessHandler
 import kr.najoan.notionclone.security.RestAuthenticationEntryPoint
+import org.springframework.beans.factory.annotation.Value
 import org.springframework.context.annotation.Bean
 import org.springframework.context.annotation.Configuration
 import org.springframework.security.config.annotation.web.builders.HttpSecurity
@@ -19,7 +20,9 @@ import org.springframework.web.cors.UrlBasedCorsConfigurationSource
 class SecurityConfig(
     private val jwtAuthenticationFilter: JwtAuthenticationFilter,
     private val oAuth2AuthenticationSuccessHandler: OAuth2AuthenticationSuccessHandler,
-    private val restAuthenticationEntryPoint: RestAuthenticationEntryPoint
+    private val restAuthenticationEntryPoint: RestAuthenticationEntryPoint,
+    @Value("\${cors.allowed-origins}")
+    private val corsAllowedOrigins: String
 ) {
 
     @Bean
@@ -48,7 +51,7 @@ class SecurityConfig(
     @Bean
     fun corsConfigurationSource(): CorsConfigurationSource {
         val configuration = CorsConfiguration()
-        configuration.allowedOrigins = listOf("http://localhost:3000", "http://localhost:8080")
+        configuration.allowedOrigins = corsAllowedOrigins.split(",").map { it.trim() }
         configuration.allowedMethods = listOf("GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS")
         configuration.allowedHeaders = listOf("*")
         configuration.allowCredentials = true
