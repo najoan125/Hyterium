@@ -5,7 +5,7 @@ FROM gradle:8.5-jdk21 AS build
 WORKDIR /app
 
 # Copy gradle files
-COPY build.gradle.kts settings.gradle.kts gradlew ./
+COPY build.gradle settings.gradle gradlew ./
 COPY gradle ./gradle
 
 # Copy source code
