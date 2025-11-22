@@ -37,6 +37,7 @@ services:
       context: ./frontend
       dockerfile: Dockerfile
       args:
+        BASE_URL: https://hyfata.kr/hyterium
         NEXT_PUBLIC_API_URL: https://hyfata.kr/hyterium/api
         NEXT_PUBLIC_WS_URL: https://hyfata.kr/hyterium/api/ws
     container_name: notion-clone-frontend
@@ -45,6 +46,7 @@ services:
       - backend
     environment:
       NODE_ENV: production
+      BASE_URL: https://hyfata.kr/hyterium
       NEXT_PUBLIC_API_URL: https://hyfata.kr/hyterium/api
       NEXT_PUBLIC_WS_URL: https://hyfata.kr/hyterium/api/ws
     ports:
