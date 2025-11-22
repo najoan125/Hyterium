@@ -37,16 +37,16 @@ services:
       context: ./frontend
       dockerfile: Dockerfile
       args:
-        NEXT_PUBLIC_API_URL: https://hyfata.kr/hyterium/api
-        NEXT_PUBLIC_WS_URL: https://hyfata.kr/hyterium/api/ws
+        NEXT_PUBLIC_API_URL: https://hyfata.kr/hyterium
+        NEXT_PUBLIC_WS_URL: https://hyfata.kr/hyterium
     container_name: notion-clone-frontend
     restart: unless-stopped
     depends_on:
       - backend
     environment:
       NODE_ENV: production
-      NEXT_PUBLIC_API_URL: https://hyfata.kr/hyterium/api
-      NEXT_PUBLIC_WS_URL: https://hyfata.kr/hyterium/api/ws
+      NEXT_PUBLIC_API_URL: https://hyfata.kr/hyterium
+      NEXT_PUBLIC_WS_URL: https://hyfata.kr/hyterium
     ports:
       - "3020:3000"
     networks:
