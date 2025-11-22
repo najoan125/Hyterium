@@ -13,7 +13,8 @@ import {
     User as UserIcon,
     ChevronDown,
     ChevronRight,
-    GripVertical
+    GripVertical,
+    Minus,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Workspace, Page, User, WorkspaceRole } from "@/lib/types";
@@ -41,6 +42,7 @@ interface SidebarProps {
     user?: User | null;
     onLogout: () => void;
     onCreatePage: () => void;
+    onDeletePage: (pageId: number) => void;
     workspaceId: number;
     currentPageId?: number | null;
     onReorderPages: (pages: Page[]) => void;
@@ -51,11 +53,13 @@ function SortablePageItem({
     page,
     workspaceId,
     currentPageId,
-    level = 0
+    onDeletePage,
+    level = 0,
 }: {
     page: Page;
     workspaceId: number;
     currentPageId?: number | null;
+    onDeletePage: (pageId: number) => void;
     level?: number;
 }) {
     const [isExpanded, setIsExpanded] = useState(true);
@@ -155,6 +159,19 @@ function SortablePageItem({
                         : "text-gray-400 dark:text-gray-500 group-hover:text-gray-600 dark:group-hover:text-gray-300"
                 )} />
                 <span className="truncate flex-1">{page.title}</span>
+                <div className="ml-auto opacity-0 group-hover:opacity-100 transition-opacity">
+                    <button
+                        onClick={(e) => {
+                            e.preventDefault();
+                            e.stopPropagation();
+                            onDeletePage(page.id);
+                        }}
+                        className="p-0.5 rounded hover:bg-gray-300 dark:hover:bg-gray-700"
+                        title="Delete page"
+                    >
+                        <Minus className="w-3 h-3 text-gray-500" />
+                    </button>
+                </div>
             </Link>
             {hasChildren && isExpanded && (
                 <div>
@@ -164,6 +181,7 @@ function SortablePageItem({
                             page={childPage}
                             workspaceId={workspaceId}
                             currentPageId={currentPageId}
+                            onDeletePage={onDeletePage}
                             level={level + 1}
                         />
                     ))}
@@ -179,6 +197,7 @@ export function Sidebar({
     user,
     onLogout,
     onCreatePage,
+    onDeletePage,
     workspaceId,
     currentPageId,
     onReorderPages,
@@ -300,6 +319,7 @@ export function Sidebar({
                                         page={page}
                                         workspaceId={workspaceId}
                                         currentPageId={currentPageId}
+                                        onDeletePage={onDeletePage}
                                     />
                                 ))}
                             </SortableContext>

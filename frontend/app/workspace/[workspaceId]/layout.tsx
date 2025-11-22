@@ -34,6 +34,8 @@ export default function WorkspaceLayout({
     const [loading, setLoading] = useState(true);
     const [showCreatePage, setShowCreatePage] = useState(false);
     const [newPageTitle, setNewPageTitle] = useState("");
+    const [showDeletePage, setShowDeletePage] = useState(false);
+    const [pageToDelete, setPageToDelete] = useState<Page | null>(null);
 
     // Handle workspace-level WebSocket messages
     const handleWorkspaceMessage = useCallback((message: WebSocketMessage) => {
@@ -108,6 +110,32 @@ export default function WorkspaceLayout({
         }
     };
 
+    const handleDeletePageRequest = (pageId: number) => {
+        const page = pages.find(p => p.id === pageId);
+        if (page) {
+            setPageToDelete(page);
+            setShowDeletePage(true);
+        }
+    };
+
+    const handleConfirmDelete = async () => {
+        if (!pageToDelete) return;
+
+        try {
+            await pageApi.delete(workspaceId, pageToDelete.id);
+            removePage(pageToDelete.id);
+            setShowDeletePage(false);
+            setPageToDelete(null);
+
+            // If the deleted page was the current page, navigate to the workspace root
+            if (currentPageId === pageToDelete.id) {
+                router.push(`/workspace/${workspaceId}`);
+            }
+        } catch (error) {
+            console.error("Failed to delete page:", error);
+        }
+    };
+
     const handleReorderPages = async (reorderedPages: Page[]) => {
         // Update local state immediately for smooth UX
         setPages(reorderedPages);
@@ -148,6 +176,7 @@ export default function WorkspaceLayout({
                 user={user}
                 onLogout={() => useAuthStore.getState().logout()}
                 onCreatePage={() => setShowCreatePage(true)}
+                onDeletePage={handleDeletePageRequest}
                 workspaceId={workspaceId}
                 currentPageId={currentPageId}
                 onReorderPages={handleReorderPages}
@@ -191,6 +220,32 @@ export default function WorkspaceLayout({
                     </div>
                 </div>
             </Modal>
+
+            {pageToDelete && (
+                <Modal
+                    isOpen={showDeletePage}
+                    onClose={() => setShowDeletePage(false)}
+                    title="Delete Page"
+                >
+                    <div className="space-y-4">
+                        <p>Are you sure you want to delete the page "<strong>{pageToDelete.title}</strong>"? This action cannot be undone.</p>
+                        <div className="flex justify-end gap-3 pt-2">
+                            <Button
+                                variant="ghost"
+                                onClick={() => setShowDeletePage(false)}
+                            >
+                                Cancel
+                            </Button>
+                            <Button
+                                variant="destructive"
+                                onClick={handleConfirmDelete}
+                            >
+                                Delete
+                            </Button>
+                        </div>
+                    </div>
+                </Modal>
+            )}
         </div>
     );
 }
