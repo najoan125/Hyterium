@@ -36,6 +36,9 @@ services:
     build:
       context: ./frontend
       dockerfile: Dockerfile
+      args:
+        NEXT_PUBLIC_API_URL: https://hyfata.kr/hyterium/api
+        NEXT_PUBLIC_WS_URL: https://hyfata.kr/hyterium/api/ws
     container_name: notion-clone-frontend
     restart: unless-stopped
     depends_on:
