@@ -75,4 +75,14 @@ class PageController(
         pageService.deletePage(pageId, userPrincipal.user.id!!)
         return ResponseEntity.noContent().build()
     }
+
+    @PostMapping("/reorder")
+    fun reorderPages(
+        @PathVariable workspaceId: Long,
+        @AuthenticationPrincipal userPrincipal: UserPrincipal,
+        @RequestBody request: kr.najoan.notionclone.dto.ReorderPagesRequest
+    ): ResponseEntity<Void> {
+        pageService.reorderPages(workspaceId, userPrincipal.user.id!!, request)
+        return ResponseEntity.ok().build()
+    }
 }

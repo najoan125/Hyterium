@@ -48,6 +48,7 @@ data class PageDto(
     val createdBy: UserDto,
     val createdAt: String,
     val updatedAt: String,
+    val sortOrder: Int,
     val childPages: List<PageDto>?
 )
 
@@ -61,7 +62,18 @@ data class CreatePageRequest(
 data class UpdatePageRequest(
     val title: String?,
     val icon: String?,
-    val coverImage: String?
+    val coverImage: String?,
+    val parentPageId: Long?
+)
+
+data class ReorderPagesRequest(
+    val pageOrders: List<PageOrderDto>
+)
+
+data class PageOrderDto(
+    val pageId: Long,
+    val sortOrder: Int,
+    val parentPageId: Long?
 )
 
 data class BlockDto(

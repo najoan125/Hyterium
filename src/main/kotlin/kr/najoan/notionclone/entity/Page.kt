@@ -44,6 +44,9 @@ data class Page(
     @Column(nullable = false)
     var isDeleted: Boolean = false,
 
+    @Column(nullable = false)
+    var sortOrder: Int = 0,
+
     @OneToMany(mappedBy = "parentPage", cascade = [CascadeType.ALL])
     val childPages: MutableList<Page> = mutableListOf(),
 

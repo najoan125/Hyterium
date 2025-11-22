@@ -1,7 +1,7 @@
 "use client";
 
-import { useEffect, useState } from "react";
-import { useRouter, useParams } from "next/navigation";
+import { useEffect, useState, useCallback } from "react";
+import { useRouter, useParams, usePathname } from "next/navigation";
 import { useAuthStore } from "@/lib/store/authStore";
 import { useWorkspaceStore } from "@/lib/store/workspaceStore";
 import { workspaceApi } from "@/lib/api/workspace";
@@ -10,6 +10,8 @@ import { Sidebar } from "@/components/ui/Sidebar";
 import { Modal } from "@/components/ui/Modal";
 import { Input } from "@/components/ui/Input";
 import { Button } from "@/components/ui/Button";
+import { useWorkspaceWebSocket } from "@/lib/hooks/useWorkspaceWebSocket";
+import { WebSocketMessage, WebSocketEventType, Page } from "@/lib/types";
 
 export default function WorkspaceLayout({
     children,
@@ -18,14 +20,55 @@ export default function WorkspaceLayout({
 }) {
     const router = useRouter();
     const params = useParams();
+    const pathname = usePathname();
     const workspaceId = Number(params.workspaceId);
 
+    // Extract current pageId from pathname
+    const currentPageId = pathname?.match(/\/page\/(\d+)/)?.[1]
+        ? Number(pathname.match(/\/page\/(\d+)/)?.[1])
+        : null;
+
     const { isAuthenticated, user } = useAuthStore();
-    const { currentWorkspace, setCurrentWorkspace, pages, setPages } = useWorkspaceStore();
+    const { currentWorkspace, setCurrentWorkspace, pages, setPages, addPage, updatePage, removePage } = useWorkspaceStore();
 
     const [loading, setLoading] = useState(true);
     const [showCreatePage, setShowCreatePage] = useState(false);
     const [newPageTitle, setNewPageTitle] = useState("");
+
+    // Handle workspace-level WebSocket messages
+    const handleWorkspaceMessage = useCallback((message: WebSocketMessage) => {
+        // Ignore messages from current user
+        if (message.userId === user?.id) return;
+
+        switch (message.type) {
+            case WebSocketEventType.PAGE_CREATED:
+                if (message.data) {
+                    const newPage = message.data as Page;
+                    addPage(newPage);
+                }
+                break;
+            case WebSocketEventType.PAGE_UPDATED:
+                if (message.data) {
+                    // Check if this is a reorder event
+                    if (typeof message.data === 'object' && 'reordered' in message.data) {
+                        // Reload all pages to get the correct order
+                        pageApi.getWorkspacePages(workspaceId).then(setPages);
+                    } else {
+                        const updatedPage = message.data as Page;
+                        updatePage(updatedPage.id, updatedPage);
+                    }
+                }
+                break;
+            case WebSocketEventType.PAGE_DELETED:
+                if (message.pageId) {
+                    removePage(message.pageId);
+                }
+                break;
+        }
+    }, [user?.id, workspaceId, addPage, updatePage, removePage]);
+
+    // Connect to workspace-level WebSocket
+    useWorkspaceWebSocket(workspaceId, handleWorkspaceMessage);
 
     useEffect(() => {
         if (!isAuthenticated) {
@@ -85,6 +128,7 @@ export default function WorkspaceLayout({
                 onLogout={() => useAuthStore.getState().logout()}
                 onCreatePage={() => setShowCreatePage(true)}
                 workspaceId={workspaceId}
+                currentPageId={currentPageId}
             />
 
             <div className="flex-1 flex flex-col min-w-0 overflow-hidden">

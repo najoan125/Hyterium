@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { useState } from "react";
 import {
     ChevronLeft,
     Plus,
@@ -7,7 +8,9 @@ import {
     LogOut,
     ChevronsLeft,
     Folder,
-    User as UserIcon
+    User as UserIcon,
+    ChevronDown,
+    ChevronRight
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Workspace, Page, User } from "@/lib/types";
@@ -19,6 +22,77 @@ interface SidebarProps {
     onLogout: () => void;
     onCreatePage: () => void;
     workspaceId: number;
+    currentPageId?: number | null;
+}
+
+// Recursive PageItem component for nested pages
+function PageItem({
+    page,
+    workspaceId,
+    currentPageId,
+    level = 0
+}: {
+    page: Page;
+    workspaceId: number;
+    currentPageId?: number | null;
+    level?: number;
+}) {
+    const [isExpanded, setIsExpanded] = useState(true);
+    const isActive = currentPageId === page.id;
+    const hasChildren = page.childPages && page.childPages.length > 0;
+
+    return (
+        <div>
+            <Link
+                href={`/workspace/${workspaceId}/page/${page.id}`}
+                className={cn(
+                    "flex items-center gap-2 px-3 py-1.5 text-sm rounded-md transition-colors group",
+                    isActive
+                        ? "bg-gray-200 dark:bg-gray-800 text-gray-900 dark:text-gray-100 font-medium"
+                        : "text-gray-600 dark:text-gray-300 hover:bg-gray-200/60 dark:hover:bg-gray-800/60 hover:text-gray-900 dark:hover:text-gray-100"
+                )}
+                style={{ paddingLeft: `${12 + level * 16}px` }}
+            >
+                {hasChildren && (
+                    <button
+                        onClick={(e) => {
+                            e.preventDefault();
+                            e.stopPropagation();
+                            setIsExpanded(!isExpanded);
+                        }}
+                        className="hover:bg-gray-300/50 dark:hover:bg-gray-700/50 rounded p-0.5 transition-colors"
+                    >
+                        {isExpanded ? (
+                            <ChevronDown className="w-3 h-3" />
+                        ) : (
+                            <ChevronRight className="w-3 h-3" />
+                        )}
+                    </button>
+                )}
+                {!hasChildren && <div className="w-4" />}
+                <FileText className={cn(
+                    "w-4 h-4 transition-colors flex-shrink-0",
+                    isActive
+                        ? "text-gray-600 dark:text-gray-300"
+                        : "text-gray-400 dark:text-gray-500 group-hover:text-gray-600 dark:group-hover:text-gray-300"
+                )} />
+                <span className="truncate flex-1">{page.title}</span>
+            </Link>
+            {hasChildren && isExpanded && (
+                <div>
+                    {page.childPages!.map((childPage) => (
+                        <PageItem
+                            key={childPage.id}
+                            page={childPage}
+                            workspaceId={workspaceId}
+                            currentPageId={currentPageId}
+                            level={level + 1}
+                        />
+                    ))}
+                </div>
+            )}
+        </div>
+    );
 }
 
 export function Sidebar({
@@ -27,7 +101,8 @@ export function Sidebar({
     user,
     onLogout,
     onCreatePage,
-    workspaceId
+    workspaceId,
+    currentPageId
 }: SidebarProps) {
     return (
         <aside className="w-64 border-r border-gray-200 dark:border-gray-800 bg-gray-50 dark:bg-[#1a1a1a] flex flex-col h-screen sticky top-0">
@@ -91,14 +166,12 @@ export function Sidebar({
 
                     <div className="space-y-0.5">
                         {pages.map((page) => (
-                            <Link
+                            <PageItem
                                 key={page.id}
-                                href={`/workspace/${workspaceId}/page/${page.id}`}
-                                className="flex items-center gap-2 px-3 py-1.5 text-sm text-gray-600 dark:text-gray-300 hover:bg-gray-200/60 dark:hover:bg-gray-800/60 hover:text-gray-900 dark:hover:text-gray-100 rounded-md transition-colors group"
-                            >
-                                <FileText className="w-4 h-4 text-gray-400 dark:text-gray-500 group-hover:text-gray-600 dark:group-hover:text-gray-300" />
-                                <span className="truncate">{page.title}</span>
-                            </Link>
+                                page={page}
+                                workspaceId={workspaceId}
+                                currentPageId={currentPageId}
+                            />
                         ))}
                         {pages.length === 0 && (
                             <div className="px-3 py-2 text-xs text-gray-400 dark:text-gray-500 italic">
