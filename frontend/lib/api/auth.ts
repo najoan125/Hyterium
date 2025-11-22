@@ -2,7 +2,7 @@ import apiClient from "./client";
 import { User } from "../types";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8080";
-const FRONT_URL = process.env.BASE_URL || "http://localhost:3000";
+const FRONT_URL = process.env.NEXT_PUBLIC_BASE_URL || "http://localhost:3000";
 
 export const authApi = {
   async getCurrentUser(): Promise<User> {
