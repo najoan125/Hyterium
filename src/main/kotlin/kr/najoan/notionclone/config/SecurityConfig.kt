@@ -22,7 +22,9 @@ class SecurityConfig(
     private val oAuth2AuthenticationSuccessHandler: OAuth2AuthenticationSuccessHandler,
     private val restAuthenticationEntryPoint: RestAuthenticationEntryPoint,
     @Value("\${cors.allowed-origins}")
-    private val corsAllowedOrigins: String
+    private val corsAllowedOrigins: String,
+    @Value("\${base.url}")
+    private val baseUrl: String,
 ) {
 
     @Bean
@@ -50,6 +52,12 @@ class SecurityConfig(
                 oauth2
                     .successHandler(oAuth2AuthenticationSuccessHandler)
                     .failureUrl("/login?error=true")
+            }
+            .logout { logout ->
+                logout
+                    .logoutUrl("/api/auth/logout")
+                    .logoutSuccessUrl(baseUrl)
+                    .deleteCookies("JSESSIONID")
             }
             .addFilterBefore(jwtAuthenticationFilter, UsernamePasswordAuthenticationFilter::class.java)
 
