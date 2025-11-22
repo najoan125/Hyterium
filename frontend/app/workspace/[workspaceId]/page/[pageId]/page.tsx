@@ -1,0 +1,353 @@
+"use client";
+
+import { useEffect, useState, useRef } from "react";
+import { useRouter, useParams } from "next/navigation";
+import { useAuthStore } from "@/lib/store/authStore";
+import { useWorkspaceStore } from "@/lib/store/workspaceStore";
+import { pageApi } from "@/lib/api/page";
+import { workspaceApi } from "@/lib/api/workspace";
+import BlockNoteEditorComponent from "@/components/editor/BlockNoteEditor";
+import { useWebSocket } from "@/lib/hooks/useWebSocket";
+import { WebSocketMessage, WebSocketEventType, WorkspaceMember } from "@/lib/types";
+import Link from "next/link";
+
+export default function PageEditPage() {
+  const router = useRouter();
+  const params = useParams();
+  const workspaceId = Number(params.workspaceId);
+  const pageId = Number(params.pageId);
+
+  const { isAuthenticated, user } = useAuthStore();
+  const { currentWorkspace, currentPage, setCurrentPage } = useWorkspaceStore();
+
+  const [loading, setLoading] = useState(true);
+  const [activeUsers, setActiveUsers] = useState<any[]>([]);
+  const [showMembers, setShowMembers] = useState(false);
+  const [members, setMembers] = useState<WorkspaceMember[]>([]);
+  const [showInvite, setShowInvite] = useState(false);
+  const [inviteLink, setInviteLink] = useState("");
+  const [userRole, setUserRole] = useState<string | null>(null);
+  const [localTitle, setLocalTitle] = useState("");
+  const titleUpdateTimeout = useRef<NodeJS.Timeout | null>(null);
+  const isComposing = useRef(false);
+
+  const handleWebSocketMessage = (message: WebSocketMessage) => {
+    switch (message.type) {
+      case WebSocketEventType.USER_JOINED:
+        if (message.userId !== user?.id) {
+          setActiveUsers((prev) => {
+            const exists = prev.find((u) => u.userId === message.userId);
+            if (!exists && message.data) {
+              return [...prev, message.data];
+            }
+            return prev;
+          });
+        }
+        break;
+      case WebSocketEventType.USER_LEFT:
+        setActiveUsers((prev) => prev.filter((u) => u.userId !== message.userId));
+        break;
+      case WebSocketEventType.PAGE_UPDATED:
+        if (message.pageId === pageId && message.data) {
+          setCurrentPage({ ...currentPage!, ...message.data });
+          // Update local title if not currently editing
+          if (!isComposing.current && message.data.title) {
+            setLocalTitle(message.data.title);
+          }
+        }
+        break;
+    }
+  };
+
+  const { sendMessage } = useWebSocket(workspaceId, pageId, handleWebSocketMessage);
+
+  useEffect(() => {
+    if (!isAuthenticated) {
+      router.push("/auth/login");
+      return;
+    }
+    loadData();
+  }, [workspaceId, pageId, isAuthenticated]);
+
+  const loadData = async () => {
+    try {
+      const [page, workspaceMembers] = await Promise.all([
+        pageApi.getById(workspaceId, pageId),
+        workspaceApi.getMembers(workspaceId),
+      ]);
+      setCurrentPage(page);
+      setLocalTitle(page.title || "");
+      setMembers(workspaceMembers);
+
+      const currentUserMember = workspaceMembers.find(m => m.user.id === user?.id);
+      if (currentUserMember) {
+        setUserRole(currentUserMember.role);
+      }
+    } catch (error) {
+      console.error("Failed to load data:", error);
+      router.push(`/workspace/${workspaceId}`);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleTitleChange = (newTitle: string) => {
+    if (!currentPage) return;
+
+    // Update local state immediately for responsive UI
+    setLocalTitle(newTitle);
+
+    // Don't send updates while composing (한글 입력 중)
+    if (isComposing.current) return;
+
+    // Clear existing timeout
+    if (titleUpdateTimeout.current) {
+      clearTimeout(titleUpdateTimeout.current);
+    }
+
+    // Debounce API call and WebSocket message
+    titleUpdateTimeout.current = setTimeout(async () => {
+      try {
+        await pageApi.update(workspaceId, pageId, { title: newTitle });
+        setCurrentPage({ ...currentPage, title: newTitle });
+        sendMessage(`/app/workspace/${workspaceId}/page/${pageId}/update`, {
+          title: newTitle,
+        });
+      } catch (error) {
+        console.error("Failed to update title:", error);
+      }
+    }, 500);
+  };
+
+  const handleCreateInvite = async () => {
+    try {
+      const invite = await workspaceApi.createInviteLink(workspaceId, { role: "MEMBER" });
+      const baseUrl = window.location.origin;
+      setInviteLink(`${baseUrl}/invite/${invite.token}`);
+    } catch (error) {
+      console.error("Failed to create invite:", error);
+      // Don't redirect to login on 401/403 here, just show error
+      alert("Failed to generate invite link. You may not have permission.");
+    }
+  };
+
+  if (loading) {
+    return (
+      <div className="flex-1 bg-white dark:bg-[#191919] flex items-center justify-center">
+        <div className="text-gray-400">Loading...</div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="flex-1 flex flex-col bg-white dark:bg-[#191919] text-gray-900 dark:text-gray-100 h-screen overflow-hidden">
+      {/* Navigation */}
+      <nav className="border-b border-gray-200 dark:border-gray-800 shrink-0">
+        <div className="max-w-7xl mx-auto px-6">
+          <div className="flex justify-between items-center h-12">
+            <div className="flex items-center gap-3">
+              <div className="flex items-center gap-1.5">
+                <div className="w-5 h-5 bg-gray-100 dark:bg-gray-800 rounded flex items-center justify-center text-xs">
+                  {currentWorkspace?.icon || "📁"}
+                </div>
+                <span className="text-xs text-gray-600 dark:text-gray-300">{currentWorkspace?.name}</span>
+                <span className="text-gray-400">/</span>
+                <span className="text-xs text-gray-900 dark:text-gray-100 font-medium">{currentPage?.title || "Untitled"}</span>
+              </div>
+            </div>
+
+            <div className="flex items-center gap-3">
+              <Link
+                href={`/workspace/${workspaceId}/settings`}
+                className="text-xs text-gray-500 hover:text-gray-900 dark:text-gray-400 dark:hover:text-gray-200"
+              >
+                Settings
+              </Link>
+              <Link
+                href="/settings"
+                className="text-xs text-gray-500 hover:text-gray-900 dark:text-gray-400 dark:hover:text-gray-200"
+              >
+                User
+              </Link>
+              <div className="h-3 w-px bg-gray-300 dark:bg-gray-700"></div>
+
+              {/* Active Users */}
+              <div className="flex -space-x-2">
+                {activeUsers.slice(0, 3).map((activeUser) => (
+                  <div
+                    key={activeUser.userId}
+                    className="w-6 h-6 rounded-full bg-gray-200 flex items-center justify-center text-xs font-medium border-2 border-white"
+                    title={activeUser.username}
+                  >
+                    {activeUser.username.charAt(0).toUpperCase()}
+                  </div>
+                ))}
+                {user && (
+                  <div
+                    className="w-6 h-6 rounded-full bg-black flex items-center justify-center text-xs font-medium text-white border-2 border-white"
+                    title={`${user.username} (You)`}
+                  >
+                    {user.username.charAt(0).toUpperCase()}
+                  </div>
+                )}
+              </div>
+
+              <button
+                onClick={() => setShowMembers(true)}
+                className="flex items-center gap-1.5 px-3 py-1.5 text-xs text-gray-600 hover:bg-gray-50 dark:text-gray-300 dark:hover:bg-gray-800 rounded transition-colors"
+              >
+                <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z" />
+                </svg>
+                Members
+              </button>
+
+              {(userRole === 'OWNER' || userRole === 'ADMIN') && (
+                <button
+                  onClick={() => setShowInvite(true)}
+                  className="flex items-center gap-1.5 px-3 py-1.5 bg-black hover:bg-gray-800 dark:bg-white dark:text-black dark:hover:bg-gray-200 text-white text-xs rounded transition-colors"
+                >
+                  <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8.684 13.342C8.886 12.938 9 12.482 9 12c0-.482-.114-.938-.316-1.342m0 2.684a3 3 0 110-2.684m0 2.684l6.632 3.316m-6.632-6l6.632-3.316m0 0a3 3 0 105.367-2.684 3 3 0 00-5.367 2.684zm0 9.316a3 3 0 105.368 2.684 3 3 0 00-5.368-2.684z" />
+                  </svg>
+                  Share
+                </button>
+              )}
+            </div>
+          </div>
+        </div>
+      </nav>
+
+      {/* Editor */}
+      <main className="flex-1 overflow-y-auto">
+        <div className="max-w-3xl mx-auto px-24 py-12">
+          <input
+            type="text"
+            value={localTitle}
+            onChange={(e) => handleTitleChange(e.target.value)}
+            onCompositionStart={() => {
+              isComposing.current = true;
+            }}
+            onCompositionEnd={(e) => {
+              isComposing.current = false;
+              // Trigger update after composition ends
+              handleTitleChange((e.target as HTMLInputElement).value);
+            }}
+            className="text-4xl font-bold w-full mb-4 border-none focus:outline-none bg-transparent placeholder-gray-300 dark:placeholder-gray-600 text-gray-900 dark:text-gray-100"
+            placeholder="Untitled"
+          />
+
+          <BlockNoteEditorComponent pageId={pageId} workspaceId={workspaceId} />
+        </div>
+      </main>
+
+      {/* Members Modal */}
+      {showMembers && (
+        <div className="fixed inset-0 bg-black/20 flex items-center justify-center z-50 p-4">
+          <div className="bg-white dark:bg-[#202020] rounded-lg p-6 max-w-2xl w-full max-h-[80vh] overflow-y-auto shadow-xl border border-gray-200 dark:border-gray-700">
+            <div className="flex items-center justify-between mb-6">
+              <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100">Workspace Members</h3>
+              <button
+                onClick={() => setShowMembers(false)}
+                className="text-gray-400 hover:text-gray-600"
+              >
+                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </button>
+            </div>
+
+            <div className="space-y-2">
+              {members.map((member) => (
+                <div key={member.id} className="flex items-center justify-between p-3 border border-gray-200 dark:border-gray-700 rounded-lg hover:border-gray-300 dark:hover:border-gray-600">
+                  <div className="flex items-center gap-3">
+                    <div className="w-10 h-10 rounded-full bg-gray-200 dark:bg-gray-700 flex items-center justify-center text-sm font-medium text-gray-900 dark:text-gray-100">
+                      {member.user.username.charAt(0).toUpperCase()}
+                    </div>
+                    <div>
+                      <div className="text-sm font-medium text-gray-900 dark:text-gray-100">{member.user.username}</div>
+                      <div className="text-xs text-gray-500 dark:text-gray-400">{member.user.email}</div>
+                    </div>
+                  </div>
+                  <span className="text-xs text-gray-500 dark:text-gray-400 bg-gray-100 dark:bg-gray-800 px-2 py-1 rounded">
+                    {member.role}
+                  </span>
+                </div>
+              ))}
+            </div>
+
+            <div className="mt-6 flex justify-end">
+              <button
+                onClick={() => setShowMembers(false)}
+                className="px-4 py-2 bg-gray-100 hover:bg-gray-200 dark:bg-gray-800 dark:hover:bg-gray-700 text-gray-700 dark:text-gray-300 text-sm rounded-lg transition-colors"
+              >
+                Close
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Invite Modal */}
+      {showInvite && (
+        <div className="fixed inset-0 bg-black/20 flex items-center justify-center z-50 p-4">
+          <div className="bg-white dark:bg-[#202020] rounded-lg p-6 max-w-md w-full shadow-xl border border-gray-200 dark:border-gray-700">
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100">Share Workspace</h3>
+              <button
+                onClick={() => {
+                  setShowInvite(false);
+                  setInviteLink("");
+                }}
+                className="text-gray-400 hover:text-gray-600"
+              >
+                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </button>
+            </div>
+
+            {inviteLink ? (
+              <div>
+                <p className="text-xs text-gray-500 mb-3">
+                  Share this link to invite others to your workspace
+                </p>
+                <div className="flex items-center gap-2 mb-4">
+                  <input
+                    type="text"
+                    value={inviteLink}
+                    readOnly
+                    className="flex-1 px-3 py-2 border border-gray-200 dark:border-gray-700 rounded-lg bg-gray-50 dark:bg-gray-800 text-xs text-gray-900 dark:text-gray-100"
+                  />
+                  <button
+                    onClick={() => navigator.clipboard.writeText(inviteLink)}
+                    className="px-3 py-2 bg-black hover:bg-gray-800 text-white text-xs rounded-lg transition-colors"
+                  >
+                    Copy
+                  </button>
+                </div>
+              </div>
+            ) : (
+              <button
+                onClick={handleCreateInvite}
+                className="w-full px-4 py-2 bg-black hover:bg-gray-800 text-white text-sm rounded-lg transition-colors mb-3"
+              >
+                Generate Invite Link
+              </button>
+            )}
+
+            <button
+              onClick={() => {
+                setShowInvite(false);
+                setInviteLink("");
+              }}
+              className="w-full px-4 py-2 bg-gray-100 hover:bg-gray-200 dark:bg-gray-800 dark:hover:bg-gray-700 text-gray-700 dark:text-gray-300 text-sm rounded-lg transition-colors"
+            >
+              Close
+            </button>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
