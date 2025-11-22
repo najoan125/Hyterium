@@ -36,6 +36,7 @@ export default function BlockNoteEditorComponent({
   editable = true,
 }: BlockNoteEditorProps) {
   const [isLoading, setIsLoading] = useState(true);
+  const [isEditorReady, setIsEditorReady] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const saveTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const editorRef = useRef<BlockNoteEditor | null>(null);
@@ -87,6 +88,10 @@ export default function BlockNoteEditorComponent({
   useEffect(() => {
     if (editor) {
       editorRef.current = editor;
+      // Mark editor as ready after a brief delay to ensure full initialization
+      setTimeout(() => {
+        setIsEditorReady(true);
+      }, 500);
     }
   }, [editor]);
 
@@ -120,8 +125,8 @@ export default function BlockNoteEditorComponent({
 
       // Only update editor content on initial load
       if (isInitialLoadRef.current && editorRef.current) {
-        // Wait a bit for editor to be ready
-        await new Promise(resolve => setTimeout(resolve, 100));
+        // Wait for editor to be fully ready
+        await new Promise(resolve => setTimeout(resolve, 300));
 
         // Always load blocks on initial load if we have blocks from API
         if (blockNoteBlocks.length > 0) {
@@ -137,6 +142,9 @@ export default function BlockNoteEditorComponent({
         }
 
         isInitialLoadRef.current = false;
+
+        // Wait a bit more to ensure editor content is settled
+        await new Promise(resolve => setTimeout(resolve, 200));
       }
 
       setIsLoading(false);
@@ -175,7 +183,11 @@ export default function BlockNoteEditorComponent({
 
   // Auto-save on editor changes
   const handleChange = useCallback(() => {
-    if (!editor) return;
+    // Don't save if editor is not ready or still loading
+    if (!editor || !isEditorReady || isLoading || isInitialLoadRef.current) {
+      console.log('Skipping save - editor not ready or still loading');
+      return;
+    }
 
     // Clear existing timeout
     if (saveTimeoutRef.current) {
@@ -187,7 +199,7 @@ export default function BlockNoteEditorComponent({
       const content = editor.document;
       saveBlocks(content);
     }, 2000);
-  }, [editor, saveBlocks]);
+  }, [editor, isEditorReady, isLoading, saveBlocks]);
 
   // Cleanup on unmount
   useEffect(() => {
@@ -204,10 +216,16 @@ export default function BlockNoteEditorComponent({
   const { theme, resolvedTheme } = useTheme();
   const editorTheme = resolvedTheme === 'dark' ? 'dark' : 'light';
 
-  if (isLoading) {
+  // Show loading state until both editor is loaded and ready
+  if (isLoading || !isEditorReady) {
     return (
-      <div className="flex items-center justify-center h-64">
-        <div className="text-gray-500 dark:text-gray-400">Loading editor...</div>
+      <div className="flex items-center justify-center h-64 bg-gray-50 dark:bg-gray-900/50 rounded-lg">
+        <div className="flex flex-col items-center space-y-3">
+          <div className="w-8 h-8 border-2 border-gray-300 dark:border-gray-600 border-t-blue-600 dark:border-t-blue-400 rounded-full animate-spin"></div>
+          <div className="text-sm text-gray-500 dark:text-gray-400">
+            {isLoading ? "Loading content..." : "Initializing editor..."}
+          </div>
+        </div>
       </div>
     );
   }
@@ -215,16 +233,18 @@ export default function BlockNoteEditorComponent({
   return (
     <div className="blocknote-editor-container relative">
       {isSaving && (
-        <div className="absolute top-2 right-2 text-xs text-gray-500 dark:text-gray-400">
+        <div className="absolute top-2 right-2 z-10 px-2 py-1 text-xs bg-gray-100 dark:bg-gray-800 rounded text-gray-600 dark:text-gray-400">
           Saving...
         </div>
       )}
-      <BlockNoteView
-        editor={editor}
-        onChange={handleChange}
-        editable={editable}
-        theme={editorTheme}
-      />
+      <div className={`transition-opacity duration-300 ${isEditorReady ? 'opacity-100' : 'opacity-0'}`}>
+        <BlockNoteView
+          editor={editor}
+          onChange={handleChange}
+          editable={editable}
+          theme={editorTheme}
+        />
+      </div>
     </div>
   );
 }
