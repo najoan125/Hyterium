@@ -8,9 +8,6 @@ services:
       dockerfile: Dockerfile
     container_name: notion-clone-backend
     restart: unless-stopped
-    depends_on:
-      db:
-        condition: service_healthy
     environment:
       SPRING_PROFILES_ACTIVE: prod
       DATABASE_URL: jdbc:postgresql:192.168.1.4:5432/notion_clone
