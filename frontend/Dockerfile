@@ -16,8 +16,10 @@ FROM node:20-alpine AS builder
 WORKDIR /app
 
 # Build arguments for Next.js environment variables
+ARG NEXT_PUBLIC_BASE_URL=https://hyfata.kr/hyterium
 ARG NEXT_PUBLIC_API_URL=https://hyfata.kr/hyterium/api
 ARG NEXT_PUBLIC_WS_URL=https://hyfata.kr/hyterium/api/ws
+ENV NEXT_PUBLIC_BASE_URL=$NEXT_PUBLIC_BASE_URL
 ENV NEXT_PUBLIC_API_URL=$NEXT_PUBLIC_API_URL
 ENV NEXT_PUBLIC_WS_URL=$NEXT_PUBLIC_WS_URL
 
