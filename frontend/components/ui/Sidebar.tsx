@@ -1,5 +1,7 @@
+"use client";
+
 import Link from "next/link";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import {
     ChevronLeft,
     Plus,
@@ -10,10 +12,28 @@ import {
     Folder,
     User as UserIcon,
     ChevronDown,
-    ChevronRight
+    ChevronRight,
+    GripVertical
 } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { Workspace, Page, User } from "@/lib/types";
+import { Workspace, Page, User, WorkspaceRole } from "@/lib/types";
+import {
+    DndContext,
+    closestCenter,
+    KeyboardSensor,
+    PointerSensor,
+    useSensor,
+    useSensors,
+    DragEndEvent,
+} from "@dnd-kit/core";
+import {
+    arrayMove,
+    SortableContext,
+    sortableKeyboardCoordinates,
+    useSortable,
+    verticalListSortingStrategy,
+} from "@dnd-kit/sortable";
+import { CSS } from "@dnd-kit/utilities";
 
 interface SidebarProps {
     currentWorkspace?: Workspace;
@@ -23,10 +43,11 @@ interface SidebarProps {
     onCreatePage: () => void;
     workspaceId: number;
     currentPageId?: number | null;
+    onReorderPages: (pages: Page[]) => void;
 }
 
-// Recursive PageItem component for nested pages
-function PageItem({
+// Sortable PageItem component for drag and drop
+function SortablePageItem({
     page,
     workspaceId,
     currentPageId,
@@ -38,21 +59,78 @@ function PageItem({
     level?: number;
 }) {
     const [isExpanded, setIsExpanded] = useState(true);
+    const [wasDragging, setWasDragging] = useState(false);
     const isActive = currentPageId === page.id;
     const hasChildren = page.childPages && page.childPages.length > 0;
 
+    const {
+        attributes,
+        listeners,
+        setNodeRef,
+        transform,
+        transition,
+        isDragging,
+    } = useSortable({
+        id: page.id,
+        transition: {
+            duration: 200,
+            easing: 'cubic-bezier(0.25, 1, 0.5, 1)',
+        },
+    });
+
+    const style = {
+        transform: CSS.Transform.toString(transform),
+        transition,
+        opacity: isDragging ? 0.5 : 1,
+    };
+
+    // Track dragging state changes
+    useEffect(() => {
+        if (isDragging) {
+            setWasDragging(true);
+        } else if (wasDragging) {
+            // Reset after a short delay to allow drag to complete
+            const timeout = setTimeout(() => {
+                setWasDragging(false);
+            }, 100);
+            return () => clearTimeout(timeout);
+        }
+    }, [isDragging, wasDragging]);
+
+    const handlePageClick = (e: React.MouseEvent<HTMLAnchorElement>) => {
+        // Prevent navigation if currently dragging or just finished dragging
+        if (isDragging || wasDragging) {
+            e.preventDefault();
+            e.stopPropagation();
+            return false;
+        }
+    };
+
     return (
-        <div>
+        <div ref={setNodeRef} style={style}>
             <Link
                 href={`/workspace/${workspaceId}/page/${page.id}`}
+                onClick={handlePageClick}
                 className={cn(
                     "flex items-center gap-2 px-3 py-1.5 text-sm rounded-md transition-colors group",
                     isActive
                         ? "bg-gray-200 dark:bg-gray-800 text-gray-900 dark:text-gray-100 font-medium"
-                        : "text-gray-600 dark:text-gray-300 hover:bg-gray-200/60 dark:hover:bg-gray-800/60 hover:text-gray-900 dark:hover:text-gray-100"
+                        : "text-gray-600 dark:text-gray-300 hover:bg-gray-200/60 dark:hover:bg-gray-800/60 hover:text-gray-900 dark:hover:text-gray-100",
+                    (isDragging || wasDragging) && "pointer-events-none"
                 )}
                 style={{ paddingLeft: `${12 + level * 16}px` }}
             >
+                <div
+                    {...attributes}
+                    {...listeners}
+                    className="cursor-grab active:cursor-grabbing hover:bg-gray-300/50 dark:hover:bg-gray-700/50 rounded p-0.5"
+                    onClick={(e) => {
+                        e.preventDefault();
+                        e.stopPropagation();
+                    }}
+                >
+                    <GripVertical className="w-3 h-3 text-gray-400" />
+                </div>
                 {hasChildren && (
                     <button
                         onClick={(e) => {
@@ -81,7 +159,7 @@ function PageItem({
             {hasChildren && isExpanded && (
                 <div>
                     {page.childPages!.map((childPage) => (
-                        <PageItem
+                        <SortablePageItem
                             key={childPage.id}
                             page={childPage}
                             workspaceId={workspaceId}
@@ -102,8 +180,55 @@ export function Sidebar({
     onLogout,
     onCreatePage,
     workspaceId,
-    currentPageId
+    currentPageId,
+    onReorderPages,
 }: SidebarProps) {
+    const [showUserSettings, setShowUserSettings] = useState(false);
+    const [localPages, setLocalPages] = useState(pages);
+
+    // Update local pages when props change
+    useEffect(() => {
+        setLocalPages(pages);
+    }, [pages]);
+
+    const sensors = useSensors(
+        useSensor(PointerSensor),
+        useSensor(KeyboardSensor, {
+            coordinateGetter: sortableKeyboardCoordinates,
+        })
+    );
+
+    const handleDragEnd = (event: DragEndEvent) => {
+        const { active, over } = event;
+
+        if (over && active.id !== over.id) {
+            setLocalPages((items) => {
+                const oldIndex = items.findIndex((item) => item.id === active.id);
+                const newIndex = items.findIndex((item) => item.id === over.id);
+
+                const newPages = arrayMove(items, oldIndex, newIndex);
+
+                // Update sortOrder for reordered pages
+                const updatedPages = newPages.map((page, index) => ({
+                    ...page,
+                    sortOrder: index,
+                }));
+
+                // Call the reorder callback
+                onReorderPages(updatedPages);
+
+                return updatedPages;
+            });
+        }
+    };
+
+    // Filter only top-level pages (no parent) for the main list
+    const topLevelPages = localPages.filter((page) => !page.parentPageId);
+
+    // Check if user is MEMBER or GUEST (hide Workspace Settings)
+    const canManageWorkspace = currentWorkspace?.role === WorkspaceRole.OWNER ||
+                               currentWorkspace?.role === WorkspaceRole.ADMIN;
+
     return (
         <aside className="w-64 border-r border-gray-200 dark:border-gray-800 bg-gray-50 dark:bg-[#1a1a1a] flex flex-col h-screen sticky top-0">
             {/* Workspace Header */}
@@ -134,20 +259,15 @@ export function Sidebar({
                         <ChevronsLeft className="w-4 h-4" />
                         <span>All Workspaces</span>
                     </Link>
-                    <Link
-                        href={`/workspace/${workspaceId}/settings`}
-                        className="flex items-center gap-2 px-3 py-2 text-sm text-gray-600 dark:text-gray-300 hover:bg-gray-200/60 dark:hover:bg-gray-800/60 hover:text-gray-900 dark:hover:text-gray-100 rounded-md transition-colors"
-                    >
-                        <Settings className="w-4 h-4" />
-                        <span>Workspace Settings</span>
-                    </Link>
-                    <Link
-                        href="/settings"
-                        className="flex items-center gap-2 px-3 py-2 text-sm text-gray-600 dark:text-gray-300 hover:bg-gray-200/60 dark:hover:bg-gray-800/60 hover:text-gray-900 dark:hover:text-gray-100 rounded-md transition-colors"
-                    >
-                        <UserIcon className="w-4 h-4" />
-                        <span>User Settings</span>
-                    </Link>
+                    {canManageWorkspace && (
+                        <Link
+                            href={`/workspace/${workspaceId}/settings`}
+                            className="flex items-center gap-2 px-3 py-2 text-sm text-gray-600 dark:text-gray-300 hover:bg-gray-200/60 dark:hover:bg-gray-800/60 hover:text-gray-900 dark:hover:text-gray-100 rounded-md transition-colors"
+                        >
+                            <Settings className="w-4 h-4" />
+                            <span>Workspace Settings</span>
+                        </Link>
+                    )}
                 </div>
 
                 {/* Pages Section */}
@@ -165,15 +285,26 @@ export function Sidebar({
                     </div>
 
                     <div className="space-y-0.5">
-                        {pages.map((page) => (
-                            <PageItem
-                                key={page.id}
-                                page={page}
-                                workspaceId={workspaceId}
-                                currentPageId={currentPageId}
-                            />
-                        ))}
-                        {pages.length === 0 && (
+                        <DndContext
+                            sensors={sensors}
+                            collisionDetection={closestCenter}
+                            onDragEnd={handleDragEnd}
+                        >
+                            <SortableContext
+                                items={topLevelPages.map((p) => p.id)}
+                                strategy={verticalListSortingStrategy}
+                            >
+                                {topLevelPages.map((page) => (
+                                    <SortablePageItem
+                                        key={page.id}
+                                        page={page}
+                                        workspaceId={workspaceId}
+                                        currentPageId={currentPageId}
+                                    />
+                                ))}
+                            </SortableContext>
+                        </DndContext>
+                        {topLevelPages.length === 0 && (
                             <div className="px-3 py-2 text-xs text-gray-400 dark:text-gray-500 italic">
                                 No pages yet
                             </div>
@@ -184,7 +315,10 @@ export function Sidebar({
 
             {/* User Footer */}
             <div className="p-3 border-t border-gray-200 dark:border-gray-800 bg-white dark:bg-[#1a1a1a]">
-                <div className="flex items-center gap-3 px-2 py-1.5 rounded-md hover:bg-gray-100 dark:hover:bg-gray-800/50 transition-colors cursor-pointer group">
+                <div
+                    onClick={() => setShowUserSettings(!showUserSettings)}
+                    className="flex items-center gap-3 px-2 py-1.5 rounded-md hover:bg-gray-100 dark:hover:bg-gray-800/50 transition-colors cursor-pointer group"
+                >
                     {user?.avatarUrl ? (
                         <img src={user.avatarUrl} alt={user.username} className="w-8 h-8 rounded-full border border-gray-200 dark:border-gray-700" />
                     ) : (
@@ -203,13 +337,35 @@ export function Sidebar({
                         </div>
                     </div>
                     <button
-                        onClick={onLogout}
+                        onClick={(e) => {
+                            e.stopPropagation();
+                            onLogout();
+                        }}
                         className="text-gray-400 dark:text-gray-500 hover:text-red-600 dark:hover:text-red-500 opacity-0 group-hover:opacity-100 transition-all p-1.5 hover:bg-red-50 dark:hover:bg-red-900/20 rounded"
                         title="Logout"
                     >
                         <LogOut className="w-4 h-4" />
                     </button>
                 </div>
+
+                {/* User Settings Dropdown */}
+                {showUserSettings && (
+                    <div className="mt-2 p-2 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-md shadow-lg">
+                        <div className="space-y-1">
+                            <div className="px-3 py-2 text-xs font-semibold text-gray-500 dark:text-gray-400">
+                                USER SETTINGS
+                            </div>
+                            <Link
+                                href="/settings"
+                                onClick={() => setShowUserSettings(false)}
+                                className="flex items-center gap-2 px-3 py-2 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-md transition-colors"
+                            >
+                                <UserIcon className="w-4 h-4" />
+                                <span>Profile Settings</span>
+                            </Link>
+                        </div>
+                    </div>
+                )}
             </div>
         </aside>
     );

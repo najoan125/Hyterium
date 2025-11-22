@@ -37,4 +37,13 @@ export const pageApi = {
     const response = await apiClient.get(`/workspaces/${workspaceId}/pages/${pageId}/children`);
     return response.data;
   },
+
+  async reorderPages(
+    workspaceId: number,
+    pageOrders: Array<{ pageId: number; sortOrder: number; parentPageId?: number }>
+  ): Promise<void> {
+    await apiClient.post(`/workspaces/${workspaceId}/pages/reorder`, {
+      pageOrders,
+    });
+  },
 };

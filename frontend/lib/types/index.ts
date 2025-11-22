@@ -34,6 +34,7 @@ export interface Page {
   createdBy: User;
   createdAt: string;
   updatedAt: string;
+  sortOrder: number;
   childPages?: Page[];
 }
 

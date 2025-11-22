@@ -108,6 +108,27 @@ export default function WorkspaceLayout({
         }
     };
 
+    const handleReorderPages = async (reorderedPages: Page[]) => {
+        // Update local state immediately for smooth UX
+        setPages(reorderedPages);
+
+        try {
+            // Send reorder request to backend
+            const pageOrders = reorderedPages.map((page) => ({
+                pageId: page.id,
+                sortOrder: page.sortOrder,
+                parentPageId: page.parentPageId || undefined,
+            }));
+
+            await pageApi.reorderPages(workspaceId, pageOrders);
+        } catch (error) {
+            console.error("Failed to reorder pages:", error);
+            // Reload pages on error to get correct order from server
+            const loadedPages = await pageApi.getWorkspacePages(workspaceId);
+            setPages(loadedPages);
+        }
+    };
+
     if (loading) {
         return (
             <div className="min-h-screen bg-white dark:bg-[#191919] flex items-center justify-center">
@@ -129,6 +150,7 @@ export default function WorkspaceLayout({
                 onCreatePage={() => setShowCreatePage(true)}
                 workspaceId={workspaceId}
                 currentPageId={currentPageId}
+                onReorderPages={handleReorderPages}
             />
 
             <div className="flex-1 flex flex-col min-w-0 overflow-hidden">
