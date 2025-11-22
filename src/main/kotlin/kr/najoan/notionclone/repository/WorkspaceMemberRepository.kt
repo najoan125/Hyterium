@@ -12,4 +12,5 @@ interface WorkspaceMemberRepository : JpaRepository<WorkspaceMember, Long> {
     fun findAllByUserId(userId: Long): List<WorkspaceMember>
     fun existsByWorkspaceIdAndUserId(workspaceId: Long, userId: Long): Boolean
     fun deleteByWorkspaceIdAndUserId(workspaceId: Long, userId: Long)
+    fun countByWorkspaceId(workspaceId: Long): Int
 }

@@ -83,6 +83,6 @@ class PageController(
         @RequestBody request: kr.najoan.notionclone.dto.ReorderPagesRequest
     ): ResponseEntity<Void> {
         pageService.reorderPages(workspaceId, userPrincipal.user.id!!, request)
-        return ResponseEntity.ok().build()
+        return ResponseEntity.noContent().build()
     }
 }

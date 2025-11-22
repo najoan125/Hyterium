@@ -31,10 +31,13 @@ export default function InviteAcceptPage() {
 
   const acceptInvite = async () => {
     try {
+      setLoading(true);
       const workspace = await workspaceApi.acceptInvite(token);
+      setLoading(false);
       router.push(`/workspace/${workspace.id}`);
-    } catch (err: any) {
-      setError(err.response?.data?.message || "Failed to accept invite");
+    } catch (err: unknown) {
+      const error = err as any;
+      setError(error.response?.data?.message || "Failed to accept invite");
       setLoading(false);
     }
   };

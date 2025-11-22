@@ -31,8 +31,15 @@ class PageService(
             .orElseThrow { IllegalArgumentException("Workspace not found") }
 
         val parentPage = request.parentPageId?.let {
-            pageRepository.findById(it)
+            val parent = pageRepository.findById(it)
                 .orElseThrow { IllegalArgumentException("Parent page not found") }
+
+            // Validate parent page belongs to same workspace
+            if (parent.workspace.id != workspaceId) {
+                throw IllegalArgumentException("Parent page must belong to the same workspace")
+            }
+
+            parent
         }
 
         // Calculate sortOrder for new page (last position)
@@ -189,6 +196,9 @@ class PageService(
 
         val workspaceId = page.workspace.id!!
 
+        // Cascade soft delete to all child pages recursively
+        cascadeDeleteChildren(pageId)
+
         page.isDeleted = true
         page.updatedAt = LocalDateTime.now()
         pageRepository.save(page)
@@ -205,6 +215,18 @@ class PageService(
             data = mapOf("pageId" to pageId)
         )
         messagingTemplate.convertAndSend("/topic/workspace.$workspaceId", message)
+    }
+
+    private fun cascadeDeleteChildren(pageId: Long) {
+        val childPages = pageRepository.findAllByParentPageIdAndIsDeleted(pageId)
+        childPages.forEach { child ->
+            // Recursively delete children first
+            cascadeDeleteChildren(child.id!!)
+            // Then mark this child as deleted
+            child.isDeleted = true
+            child.updatedAt = LocalDateTime.now()
+            pageRepository.save(child)
+        }
     }
 
     private fun toDto(page: Page, includeChildren: Boolean): PageDto {

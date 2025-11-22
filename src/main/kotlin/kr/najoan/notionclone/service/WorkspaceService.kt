@@ -45,7 +45,7 @@ class WorkspaceService(
         val member = workspaceMemberRepository.findByWorkspaceIdAndUserId(workspaceId, userId)
             .orElseThrow { IllegalArgumentException("You are not a member of this workspace") }
 
-        val memberCount = workspaceMemberRepository.findAllByWorkspaceId(workspaceId).size
+        val memberCount = workspaceMemberRepository.countByWorkspaceId(workspaceId)
 
         return toDto(workspace, member.role, memberCount)
     }
@@ -55,7 +55,7 @@ class WorkspaceService(
         return workspaces.map { workspace ->
             val member = workspaceMemberRepository.findByWorkspaceIdAndUserId(workspace.id!!, userId)
                 .orElseThrow { IllegalArgumentException("Member not found") }
-            val memberCount = workspaceMemberRepository.findAllByWorkspaceId(workspace.id).size
+            val memberCount = workspaceMemberRepository.countByWorkspaceId(workspace.id)
             toDto(workspace, member.role, memberCount)
         }
     }

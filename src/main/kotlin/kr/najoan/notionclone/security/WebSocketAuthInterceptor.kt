@@ -1,6 +1,7 @@
 package kr.najoan.notionclone.security
 
 import kr.najoan.notionclone.service.UserService
+import org.slf4j.LoggerFactory
 import org.springframework.messaging.Message
 import org.springframework.messaging.MessageChannel
 import org.springframework.messaging.simp.stomp.StompCommand
@@ -16,6 +17,8 @@ class WebSocketAuthInterceptor(
     private val jwtUtils: JwtUtils,
     private val userService: UserService
 ) : ChannelInterceptor {
+
+    private val logger = LoggerFactory.getLogger(WebSocketAuthInterceptor::class.java)
 
     override fun preSend(message: Message<*>, channel: MessageChannel): Message<*>? {
         val accessor = MessageHeaderAccessor.getAccessor(message, StompHeaderAccessor::class.java)
@@ -42,7 +45,7 @@ class WebSocketAuthInterceptor(
                         accessor.user = authentication
                     }
                 } catch (e: Exception) {
-                    println("WebSocket JWT validation failed: ${e.message}")
+                    logger.error("WebSocket JWT validation failed: ${e.message}", e)
                 }
             }
         }

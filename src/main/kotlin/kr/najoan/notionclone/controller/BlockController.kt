@@ -1,6 +1,7 @@
 package kr.najoan.notionclone.controller
 
 import kr.najoan.notionclone.dto.BlockDto
+import kr.najoan.notionclone.dto.BlockUpdateRequest
 import kr.najoan.notionclone.dto.CreateBlockRequest
 import kr.najoan.notionclone.dto.UpdateBlockRequest
 import kr.najoan.notionclone.security.UserPrincipal
@@ -60,7 +61,7 @@ class BlockController(
     fun bulkUpdateBlocks(
         @PathVariable pageId: Long,
         @AuthenticationPrincipal userPrincipal: UserPrincipal,
-        @RequestBody requests: List<CreateBlockRequest>
+        @RequestBody requests: List<BlockUpdateRequest>
     ): ResponseEntity<List<BlockDto>> {
         val blocks = blockService.bulkUpdateBlocks(pageId, userPrincipal.user.id!!, requests)
         return ResponseEntity.ok(blocks)

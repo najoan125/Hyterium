@@ -30,13 +30,29 @@ data class CreateWorkspaceRequest(
     val name: String,
     val description: String? = null,
     val icon: String? = null
-)
+) {
+    init {
+        require(name.isNotBlank()) { "Workspace name cannot be blank" }
+        require(name.length <= 255) { "Workspace name cannot exceed 255 characters" }
+        require(description == null || description.length <= 1000) {
+            "Workspace description cannot exceed 1000 characters"
+        }
+    }
+}
 
 data class UpdateWorkspaceRequest(
     val name: String?,
     val description: String?,
     val icon: String?
-)
+) {
+    init {
+        require(name == null || name.isNotBlank()) { "Workspace name cannot be blank" }
+        require(name == null || name.length <= 255) { "Workspace name cannot exceed 255 characters" }
+        require(description == null || description.length <= 1000) {
+            "Workspace description cannot exceed 1000 characters"
+        }
+    }
+}
 
 data class PageDto(
     val id: Long,
@@ -57,14 +73,24 @@ data class CreatePageRequest(
     val icon: String? = null,
     val coverImage: String? = null,
     val parentPageId: Long? = null
-)
+) {
+    init {
+        require(title.isNotBlank()) { "Page title cannot be blank" }
+        require(title.length <= 500) { "Page title cannot exceed 500 characters" }
+    }
+}
 
 data class UpdatePageRequest(
     val title: String?,
     val icon: String?,
     val coverImage: String?,
     val parentPageId: Long?
-)
+) {
+    init {
+        require(title == null || title.isNotBlank()) { "Page title cannot be blank" }
+        require(title == null || title.length <= 500) { "Page title cannot exceed 500 characters" }
+    }
+}
 
 data class ReorderPagesRequest(
     val pageOrders: List<PageOrderDto>
@@ -74,32 +100,6 @@ data class PageOrderDto(
     val pageId: Long,
     val sortOrder: Int,
     val parentPageId: Long?
-)
-
-data class BlockDto(
-    val id: Long,
-    val type: String,
-    val content: String?,
-    val properties: String?,
-    val position: Int,
-    val parentBlockId: Long?,
-    val createdAt: String,
-    val updatedAt: String
-)
-
-data class CreateBlockRequest(
-    val type: String,
-    val content: String?,
-    val properties: String?,
-    val position: Int,
-    val parentBlockId: Long? = null
-)
-
-data class UpdateBlockRequest(
-    val type: String?,
-    val content: String?,
-    val properties: String?,
-    val position: Int?
 )
 
 data class WorkspaceMemberDto(

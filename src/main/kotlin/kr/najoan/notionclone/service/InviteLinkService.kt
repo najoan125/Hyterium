@@ -73,6 +73,10 @@ class InviteLinkService(
         val inviteLink = inviteLinkRepository.findByToken(token)
             .orElseThrow { IllegalArgumentException("Invalid invite link") }
 
+        // Validate workspace exists
+        val workspace = workspaceRepository.findById(inviteLink.workspace.id!!)
+            .orElseThrow { IllegalArgumentException("Workspace not found") }
+
         if (!inviteLink.isActive) {
             throw IllegalArgumentException("This invite link is no longer active")
         }
@@ -83,34 +87,41 @@ class InviteLinkService(
             throw IllegalArgumentException("This invite link has expired")
         }
 
-        if (inviteLink.maxUses != null && inviteLink.usedCount >= inviteLink.maxUses!!) {
-            inviteLink.isActive = false
-            inviteLinkRepository.save(inviteLink)
-            throw IllegalArgumentException("This invite link has reached its maximum uses")
-        }
-
+        // Check existing membership first (idempotent behavior)
         val existingMember = workspaceMemberRepository.findByWorkspaceIdAndUserId(
-            inviteLink.workspace.id!!,
+            workspace.id!!,
             user.id!!
         )
 
         if (existingMember.isPresent) {
-            throw IllegalArgumentException("You are already a member of this workspace")
+            // User is already a member, return success (idempotent)
+            return workspaceService.getWorkspaceById(workspace.id!!, user.id!!)
         }
 
-        val member = WorkspaceMember(
-            workspace = inviteLink.workspace,
-            user = user,
-            role = inviteLink.role
-        )
-        workspaceMemberRepository.save(member)
+        // Atomic check and increment for maxUses to prevent race condition
+        synchronized(this) {
+            // Re-fetch to get latest usedCount
+            val latestInviteLink = inviteLinkRepository.findById(inviteLink.id!!)
+                .orElseThrow { IllegalArgumentException("Invite link not found") }
 
-        inviteLink.usedCount++
-        inviteLinkRepository.save(inviteLink)
+            if (latestInviteLink.maxUses != null && latestInviteLink.usedCount >= latestInviteLink.maxUses!!) {
+                latestInviteLink.isActive = false
+                inviteLinkRepository.save(latestInviteLink)
+                throw IllegalArgumentException("This invite link has reached its maximum uses")
+            }
 
-        val memberCount = workspaceMemberRepository.findAllByWorkspaceId(inviteLink.workspace.id!!).size
+            val member = WorkspaceMember(
+                workspace = workspace,
+                user = user,
+                role = latestInviteLink.role
+            )
+            workspaceMemberRepository.save(member)
 
-        return workspaceService.getWorkspaceById(inviteLink.workspace.id!!, user.id!!)
+            latestInviteLink.usedCount++
+            inviteLinkRepository.save(latestInviteLink)
+        }
+
+        return workspaceService.getWorkspaceById(workspace.id!!, user.id!!)
     }
 
     fun deactivateInviteLink(linkId: Long, workspaceId: Long, userId: Long) {

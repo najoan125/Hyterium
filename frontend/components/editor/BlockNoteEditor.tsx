@@ -55,8 +55,11 @@ export default function BlockNoteEditorComponent({
 
     console.log(`Creating PartyKit provider for room: ${roomName}`);
 
+    // Use environment variable for WebSocket URL, fallback to default
+    const yjsServerUrl = process.env.NEXT_PUBLIC_YJS_SERVER_URL || "blocknote-dev.yousefed.partykit.dev";
+
     const provider = new YPartyKitProvider(
-      "blocknote-dev.yousefed.partykit.dev",
+      yjsServerUrl,
       roomName,
       doc
     );
@@ -243,6 +246,7 @@ export default function BlockNoteEditorComponent({
     try {
       setIsSaving(true);
       const blockRequests = content.map((block: any, index: number) => ({
+        id: block.id,
         type: block.type || 'paragraph',
         content: JSON.stringify(block.content || []),
         properties: JSON.stringify(block.props || {}),
@@ -279,10 +283,11 @@ export default function BlockNoteEditorComponent({
         }
       }
 
-      // 최종 실패 시에만 알림
+      // 최종 실패 시에만 에러 로그 (alert 대신 console.error 사용)
       if (saveRetryCountRef.current >= 3 || !isRetry) {
         const errorMessage = error?.response?.data?.message || 'Failed to save after multiple attempts. Your content is still in the editor.';
-        alert(errorMessage);
+        console.error('Save failed:', errorMessage);
+        // TODO: Replace with proper toast notification
       }
     } finally {
       setIsSaving(false);

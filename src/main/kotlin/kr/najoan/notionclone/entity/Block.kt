@@ -4,11 +4,19 @@ import jakarta.persistence.*
 import java.time.LocalDateTime
 
 @Entity
-@Table(name = "blocks")
+@Table(
+    name = "blocks",
+    uniqueConstraints = [
+        UniqueConstraint(name = "uk_block_page_client", columnNames = ["page_id", "client_id"])
+    ]
+)
 data class Block(
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     val id: Long? = null,
+
+    @Column(name = "client_id", updatable = false)
+    val clientId: String?,
 
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "page_id", nullable = false)

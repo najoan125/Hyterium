@@ -1,6 +1,7 @@
 package kr.najoan.notionclone.controller
 
 import kr.najoan.notionclone.dto.*
+import kr.najoan.notionclone.entity.User
 import kr.najoan.notionclone.security.UserPrincipal
 import kr.najoan.notionclone.service.BlockService
 import kr.najoan.notionclone.service.PageService
@@ -9,7 +10,9 @@ import org.springframework.messaging.handler.annotation.DestinationVariable
 import org.springframework.messaging.handler.annotation.MessageMapping
 import org.springframework.messaging.handler.annotation.Payload
 import org.springframework.messaging.simp.SimpMessageSendingOperations
+import org.springframework.security.authentication.UsernamePasswordAuthenticationToken
 import org.springframework.stereotype.Controller
+import java.security.Principal
 
 @Controller
 class WebSocketController(
@@ -19,14 +22,23 @@ class WebSocketController(
     private val workspaceService: WorkspaceService
 ) {
 
+    private fun getUserFromPrincipal(principal: Principal): User {
+        val authToken = principal as? UsernamePasswordAuthenticationToken
+            ?: throw IllegalArgumentException("Invalid authentication principal")
+
+        val userPrincipal = authToken.principal as? UserPrincipal
+            ?: throw IllegalArgumentException("Invalid user principal")
+
+        return userPrincipal.user
+    }
+
     @MessageMapping("/workspace/{workspaceId}/page/{pageId}/join")
     fun handleUserJoin(
         @DestinationVariable workspaceId: Long,
         @DestinationVariable pageId: Long,
-        principal: java.security.Principal
+        principal: Principal
     ) {
-        val userPrincipal = principal as org.springframework.security.authentication.UsernamePasswordAuthenticationToken
-        val user = (userPrincipal.principal as UserPrincipal).user
+        val user = getUserFromPrincipal(principal)
 
         workspaceService.checkMemberAccess(workspaceId, user.id!!)
 
@@ -52,10 +64,9 @@ class WebSocketController(
     fun handleUserLeave(
         @DestinationVariable workspaceId: Long,
         @DestinationVariable pageId: Long,
-        principal: java.security.Principal
+        principal: Principal
     ) {
-        val userPrincipal = principal as org.springframework.security.authentication.UsernamePasswordAuthenticationToken
-        val user = (userPrincipal.principal as UserPrincipal).user
+        val user = getUserFromPrincipal(principal)
 
         val message = WebSocketMessage(
             type = WebSocketEventType.USER_LEFT,
@@ -80,10 +91,9 @@ class WebSocketController(
         @DestinationVariable workspaceId: Long,
         @DestinationVariable pageId: Long,
         @Payload updateRequest: UpdatePageRequest,
-        principal: java.security.Principal
+        principal: Principal
     ) {
-        val userPrincipal = principal as org.springframework.security.authentication.UsernamePasswordAuthenticationToken
-        val user = (userPrincipal.principal as UserPrincipal).user
+        val user = getUserFromPrincipal(principal)
 
         workspaceService.checkMemberAccess(workspaceId, user.id!!)
 
@@ -107,10 +117,9 @@ class WebSocketController(
         @DestinationVariable workspaceId: Long,
         @DestinationVariable pageId: Long,
         @Payload payload: Map<String, Any>,
-        principal: java.security.Principal
+        principal: Principal
     ) {
-        val userPrincipal = principal as org.springframework.security.authentication.UsernamePasswordAuthenticationToken
-        val user = (userPrincipal.principal as UserPrincipal).user
+        val user = getUserFromPrincipal(principal)
 
         workspaceService.checkMemberAccess(workspaceId, user.id!!)
 
@@ -142,10 +151,9 @@ class WebSocketController(
         @DestinationVariable workspaceId: Long,
         @DestinationVariable pageId: Long,
         @Payload createRequest: CreateBlockRequest,
-        principal: java.security.Principal
+        principal: Principal
     ) {
-        val userPrincipal = principal as org.springframework.security.authentication.UsernamePasswordAuthenticationToken
-        val user = (userPrincipal.principal as UserPrincipal).user
+        val user = getUserFromPrincipal(principal)
 
         workspaceService.checkMemberAccess(workspaceId, user.id!!)
 
@@ -169,10 +177,9 @@ class WebSocketController(
         @DestinationVariable workspaceId: Long,
         @DestinationVariable pageId: Long,
         @DestinationVariable blockId: Long,
-        principal: java.security.Principal
+        principal: Principal
     ) {
-        val userPrincipal = principal as org.springframework.security.authentication.UsernamePasswordAuthenticationToken
-        val user = (userPrincipal.principal as UserPrincipal).user
+        val user = getUserFromPrincipal(principal)
 
         workspaceService.checkMemberAccess(workspaceId, user.id!!)
 
@@ -195,11 +202,10 @@ class WebSocketController(
     fun handleBlocksBulkUpdate(
         @DestinationVariable workspaceId: Long,
         @DestinationVariable pageId: Long,
-        @Payload blocks: List<CreateBlockRequest>,
-        principal: java.security.Principal
+        @Payload blocks: List<BlockUpdateRequest>,
+        principal: Principal
     ) {
-        val userPrincipal = principal as org.springframework.security.authentication.UsernamePasswordAuthenticationToken
-        val user = (userPrincipal.principal as UserPrincipal).user
+        val user = getUserFromPrincipal(principal)
 
         workspaceService.checkMemberAccess(workspaceId, user.id!!)
 
@@ -223,10 +229,9 @@ class WebSocketController(
         @DestinationVariable workspaceId: Long,
         @DestinationVariable pageId: Long,
         @Payload cursorEvent: CursorPositionEvent,
-        principal: java.security.Principal
+        principal: Principal
     ) {
-        val userPrincipal = principal as org.springframework.security.authentication.UsernamePasswordAuthenticationToken
-        val user = (userPrincipal.principal as UserPrincipal).user
+        val user = getUserFromPrincipal(principal)
 
         workspaceService.checkMemberAccess(workspaceId, user.id!!)
 

@@ -32,6 +32,14 @@ class SecurityConfig(
             .csrf { it.disable() }
             .sessionManagement { it.sessionCreationPolicy(SessionCreationPolicy.STATELESS) }
             .exceptionHandling { it.authenticationEntryPoint(restAuthenticationEntryPoint) }
+            .headers { headers ->
+                headers
+                    .contentSecurityPolicy { csp ->
+                        csp.policyDirectives("default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data: https:; font-src 'self' data:; connect-src 'self' wss: ws:;")
+                    }
+                    .xssProtection { }
+                    .frameOptions { it.deny() }
+            }
             .authorizeHttpRequests { authorize ->
                 authorize
                     .requestMatchers("/api/auth/**", "/oauth2/**", "/login/**").permitAll()
@@ -53,7 +61,15 @@ class SecurityConfig(
         val configuration = CorsConfiguration()
         configuration.allowedOrigins = corsAllowedOrigins.split(",").map { it.trim() }
         configuration.allowedMethods = listOf("GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS")
-        configuration.allowedHeaders = listOf("*")
+        // Whitelist only necessary headers instead of allowing all (*)
+        configuration.allowedHeaders = listOf(
+            "Authorization",
+            "Content-Type",
+            "Accept",
+            "Origin",
+            "X-Requested-With"
+        )
+        configuration.exposedHeaders = listOf("Authorization")
         configuration.allowCredentials = true
 
         val source = UrlBasedCorsConfigurationSource()
