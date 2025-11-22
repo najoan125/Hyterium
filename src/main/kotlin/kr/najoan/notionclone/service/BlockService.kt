@@ -6,6 +6,7 @@ import kr.najoan.notionclone.dto.UpdateBlockRequest
 import kr.najoan.notionclone.entity.Block
 import kr.najoan.notionclone.repository.BlockRepository
 import kr.najoan.notionclone.repository.PageRepository
+import org.slf4j.LoggerFactory
 import org.springframework.stereotype.Service
 import org.springframework.transaction.annotation.Transactional
 import java.time.LocalDateTime
@@ -17,6 +18,7 @@ class BlockService(
     private val pageRepository: PageRepository,
     private val workspaceService: WorkspaceService
 ) {
+    private val logger = LoggerFactory.getLogger(BlockService::class.java)
 
     fun createBlock(
         pageId: Long,
@@ -77,12 +79,24 @@ class BlockService(
     }
 
     fun deleteBlock(blockId: Long, userId: Long) {
-        val block = blockRepository.findById(blockId)
-            .orElseThrow { IllegalArgumentException("Block not found") }
+        val blockOptional = blockRepository.findById(blockId)
 
+        // 블록이 이미 존재하지 않으면 삭제 성공으로 처리 (idempotent delete)
+        if (blockOptional.isEmpty) {
+            logger.info("Block $blockId already deleted or does not exist, treating as success")
+            return
+        }
+
+        val block = blockOptional.get()
         workspaceService.checkMemberAccess(block.page.workspace.id!!, userId)
 
-        blockRepository.delete(block)
+        try {
+            blockRepository.delete(block)
+        } catch (e: Exception) {
+            // 삭제 중 예외 발생 시 (예: 동시성 이슈로 이미 삭제됨)
+            logger.warn("Exception while deleting block $blockId: ${e.message}. Block may have been already deleted.")
+            // 이미 삭제된 경우라면 원하는 상태이므로 예외를 무시
+        }
     }
 
     fun bulkUpdateBlocks(
@@ -95,20 +109,48 @@ class BlockService(
 
         workspaceService.checkMemberAccess(page.workspace.id!!, userId)
 
-        blockRepository.deleteAllByPageId(pageId)
-
-        val savedBlocks = blocks.map { request ->
-            val block = Block(
-                page = page,
-                type = request.type,
-                content = request.content,
-                properties = request.properties,
-                position = request.position
-            )
-            blockRepository.save(block)
+        // 안전 검사: 빈 배열로 모든 데이터를 삭제하지 않도록 방지
+        if (blocks.isEmpty()) {
+            // 빈 배열이 전달되면 기존 데이터를 유지
+            logger.warn("Empty blocks array received for page $pageId, keeping existing data")
+            val existingBlocks = blockRepository.findAllByPageIdOrderByPosition(pageId)
+            return existingBlocks.map { toDto(it) }
         }
 
-        return savedBlocks.map { toDto(it) }
+        // 기존 블록을 먼저 백업 (로그용)
+        val existingBlocks = blockRepository.findAllByPageIdOrderByPosition(pageId)
+        logger.info("Updating ${existingBlocks.size} existing blocks with ${blocks.size} new blocks for page $pageId")
+
+        try {
+            // 트랜잭션 내에서 안전하게 처리
+            blockRepository.deleteAllByPageId(pageId)
+
+            val savedBlocks = blocks.mapIndexed { index, request ->
+                try {
+                    logger.debug("Creating block $index: type=${request.type}, position=${request.position}")
+
+                    val block = Block(
+                        page = page,
+                        type = request.type,
+                        content = request.content,
+                        properties = request.properties,
+                        position = request.position
+                    )
+                    val saved = blockRepository.save(block)
+                    logger.debug("Block $index saved with id=${saved.id}")
+                    saved
+                } catch (e: Exception) {
+                    logger.error("Failed to save block $index for page $pageId: ${e.message}", e)
+                    throw RuntimeException("Failed to save block at position ${request.position}: ${e.message}", e)
+                }
+            }
+
+            logger.info("Successfully saved ${savedBlocks.size} blocks for page $pageId")
+            return savedBlocks.map { toDto(it) }
+        } catch (e: Exception) {
+            logger.error("Error updating blocks for page $pageId: ${e.message}", e)
+            throw RuntimeException("Failed to update blocks for page $pageId: ${e.message}", e)
+        }
     }
 
     private fun toDto(block: Block): BlockDto {

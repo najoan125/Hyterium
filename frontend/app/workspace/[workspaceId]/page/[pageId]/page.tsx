@@ -1,14 +1,13 @@
 "use client";
 
-import { useEffect, useState, useRef } from "react";
+import { useEffect, useState, useRef, useCallback } from "react";
 import { useRouter, useParams } from "next/navigation";
 import { useAuthStore } from "@/lib/store/authStore";
 import { useWorkspaceStore } from "@/lib/store/workspaceStore";
 import { pageApi } from "@/lib/api/page";
 import { workspaceApi } from "@/lib/api/workspace";
 import BlockNoteEditorComponent from "@/components/editor/BlockNoteEditor";
-import { useWebSocket } from "@/lib/hooks/useWebSocket";
-import { WebSocketMessage, WebSocketEventType, WorkspaceMember } from "@/lib/types";
+import { WorkspaceMember } from "@/lib/types";
 import Link from "next/link";
 
 export default function PageEditPage() {
@@ -18,7 +17,7 @@ export default function PageEditPage() {
   const pageId = Number(params.pageId);
 
   const { isAuthenticated, user } = useAuthStore();
-  const { currentWorkspace, currentPage, setCurrentPage } = useWorkspaceStore();
+  const { currentWorkspace, currentPage, setCurrentPage, pages, setPages } = useWorkspaceStore();
 
   const [loading, setLoading] = useState(true);
   const [activeUsers, setActiveUsers] = useState<any[]>([]);
@@ -33,35 +32,12 @@ export default function PageEditPage() {
   const titleUpdateTimeout = useRef<NodeJS.Timeout | null>(null);
   const isComposing = useRef(false);
 
-  const handleWebSocketMessage = (message: WebSocketMessage) => {
-    switch (message.type) {
-      case WebSocketEventType.USER_JOINED:
-        if (message.userId !== user?.id) {
-          setActiveUsers((prev) => {
-            const exists = prev.find((u) => u.userId === message.userId);
-            if (!exists && message.data) {
-              return [...prev, message.data];
-            }
-            return prev;
-          });
-        }
-        break;
-      case WebSocketEventType.USER_LEFT:
-        setActiveUsers((prev) => prev.filter((u) => u.userId !== message.userId));
-        break;
-      case WebSocketEventType.PAGE_UPDATED:
-        if (message.pageId === pageId && message.data) {
-          setCurrentPage({ ...currentPage!, ...message.data });
-          // Update local title if not currently editing
-          if (!isComposing.current && message.data.title) {
-            setLocalTitle(message.data.title);
-          }
-        }
-        break;
-    }
-  };
-
-  const { sendMessage } = useWebSocket(workspaceId, pageId, handleWebSocketMessage);
+  // Handle active users from Yjs awareness
+  const handleUsersChange = useCallback((users: any[]) => {
+    // Filter out the current user from the active users list
+    const otherUsers = users.filter(u => u.id !== user?.id);
+    setActiveUsers(otherUsers);
+  }, [user]);
 
   useEffect(() => {
     if (!isAuthenticated) {
@@ -107,14 +83,19 @@ export default function PageEditPage() {
       clearTimeout(titleUpdateTimeout.current);
     }
 
-    // Debounce API call and WebSocket message
+    // Debounce API call
     titleUpdateTimeout.current = setTimeout(async () => {
       try {
         await pageApi.update(workspaceId, pageId, { title: newTitle });
+
+        // Update current page
         setCurrentPage({ ...currentPage, title: newTitle });
-        sendMessage(`/app/workspace/${workspaceId}/page/${pageId}/update`, {
-          title: newTitle,
-        });
+
+        // Update pages list for sidebar
+        const updatedPages = pages.map(page =>
+          page.id === pageId ? { ...page, title: newTitle } : page
+        );
+        setPages(updatedPages);
       } catch (error) {
         console.error("Failed to update title:", error);
       }
@@ -198,13 +179,14 @@ export default function PageEditPage() {
 
               {/* Active Users */}
               <div className="flex -space-x-2">
-                {activeUsers.slice(0, 3).map((activeUser) => (
+                {activeUsers.slice(0, 3).map((activeUser, index) => (
                   <div
-                    key={activeUser.userId}
-                    className="w-6 h-6 rounded-full bg-gray-200 flex items-center justify-center text-xs font-medium border-2 border-white"
-                    title={activeUser.username}
+                    key={activeUser.clientId || index}
+                    className="w-6 h-6 rounded-full flex items-center justify-center text-xs font-medium border-2 border-white"
+                    style={{ backgroundColor: activeUser.color || '#888' }}
+                    title={activeUser.name}
                   >
-                    {activeUser.username.charAt(0).toUpperCase()}
+                    {(activeUser.name || 'U').charAt(0).toUpperCase()}
                   </div>
                 ))}
                 {user && (
@@ -262,7 +244,11 @@ export default function PageEditPage() {
             placeholder="Untitled"
           />
 
-          <BlockNoteEditorComponent pageId={pageId} workspaceId={workspaceId} />
+          <BlockNoteEditorComponent
+            pageId={pageId}
+            workspaceId={workspaceId}
+            onUsersChange={handleUsersChange}
+          />
         </div>
       </main>
 

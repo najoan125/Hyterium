@@ -18,6 +18,7 @@ interface BlockNoteEditorProps {
   workspaceId: number;
   initialBlocks?: Block[];
   editable?: boolean;
+  onUsersChange?: (users: any[]) => void;
 }
 
 // Generate random color for user
@@ -34,6 +35,7 @@ export default function BlockNoteEditorComponent({
   workspaceId,
   initialBlocks = [],
   editable = true,
+  onUsersChange,
 }: BlockNoteEditorProps) {
   const [isLoading, setIsLoading] = useState(true);
   const [isEditorReady, setIsEditorReady] = useState(false);
@@ -42,6 +44,8 @@ export default function BlockNoteEditorComponent({
   const editorRef = useRef<BlockNoteEditor | null>(null);
   const isInitialLoadRef = useRef(true);
   const providerRef = useRef<YPartyKitProvider | null>(null);
+  const lastSavedContentRef = useRef<any[]>([]);
+  const saveRetryCountRef = useRef(0);
   const user = useAuthStore((state) => state.user);
 
   // Create Y.Doc and PartyKit provider
@@ -160,22 +164,126 @@ export default function BlockNoteEditorComponent({
     }
   }, [pageId, editor, loadBlocks]);
 
+  // Monitor Yjs Provider connection and awareness
+  useEffect(() => {
+    if (!provider) return;
+
+    // Connection status monitoring
+    const handleStatus = (event: any) => {
+      console.log('Yjs Provider status:', event.status);
+      if (event.status === 'disconnected') {
+        console.warn('Yjs Provider disconnected - collaboration may not work');
+      } else if (event.status === 'connected') {
+        console.log('Yjs Provider connected/reconnected');
+
+        // Set local user state when connected
+        if (user) {
+          provider.awareness.setLocalState({
+            user: {
+              id: user.id,
+              name: user.username || user.email || 'Anonymous',
+              color: generateUserColor(),
+            },
+            cursor: null,
+          });
+        }
+      }
+    };
+
+    // Awareness changes monitoring
+    const handleAwarenessChange = () => {
+      const states = Array.from(provider.awareness.getStates().entries());
+      const activeUsers = states
+        .filter(([clientId, state]: [any, any]) => state?.user)
+        .map(([clientId, state]: [any, any]) => ({
+          clientId,
+          ...state.user,
+        }));
+
+      console.log('Active users:', activeUsers);
+      onUsersChange?.(activeUsers);
+    };
+
+    provider.on('status', handleStatus);
+    provider.awareness.on('change', handleAwarenessChange);
+
+    // Set initial user state
+    if (user) {
+      provider.awareness.setLocalState({
+        user: {
+          id: user.id,
+          name: user.username || user.email || 'Anonymous',
+          color: generateUserColor(),
+        },
+        cursor: null,
+      });
+    }
+
+    return () => {
+      provider.off('status', handleStatus);
+      provider.awareness.off('change', handleAwarenessChange);
+      provider.awareness.setLocalState(null); // Clean up on unmount
+    };
+  }, [provider, user, onUsersChange]);
+
   // Save blocks to backend (debounced)
-  const saveBlocks = useCallback(async (content: any[]) => {
+  const saveBlocks = useCallback(async (content: any[], isRetry: boolean = false) => {
+    // 안전 검사: 빈 배열을 보내지 않도록 방지
+    if (!content || content.length === 0) {
+      console.warn('Skipping save - no content to save');
+      return;
+    }
+
+    // 중복 저장 방지: 같은 내용이면 저장하지 않음
+    if (JSON.stringify(content) === JSON.stringify(lastSavedContentRef.current)) {
+      console.log('Skipping save - content unchanged');
+      return;
+    }
+
     try {
       setIsSaving(true);
       const blockRequests = content.map((block: any, index: number) => ({
-        type: block.type,
+        type: block.type || 'paragraph',
         content: JSON.stringify(block.content || []),
         properties: JSON.stringify(block.props || {}),
         position: index,
       }));
 
-      console.log('Saving blocks for pageId:', pageId);
+      console.log(`Saving ${blockRequests.length} blocks for pageId:`, pageId);
+
+      // 추가 안전 검사
+      if (blockRequests.length === 0) {
+        console.error('Block requests is empty, aborting save');
+        return;
+      }
+
       await blockApi.bulkUpdate(pageId, blockRequests);
       console.log('Save successful!');
-    } catch (error) {
+      lastSavedContentRef.current = content;
+      saveRetryCountRef.current = 0;
+    } catch (error: any) {
       console.error("Failed to save blocks:", error);
+
+      // 백엔드 에러 메시지 출력
+      if (error?.response?.data) {
+        console.error("Backend error details:", error.response.data);
+      }
+
+      // 네트워크 오류 시 재시도
+      if (error?.code === 'ERR_NETWORK' || error?.response?.status >= 500) {
+        if (saveRetryCountRef.current < 3 && !isRetry) {
+          saveRetryCountRef.current++;
+          console.log(`Retrying save... (attempt ${saveRetryCountRef.current}/3)`);
+          setTimeout(() => saveBlocks(content, true), 2000);
+          return;
+        }
+      }
+
+      // 최종 실패 시에만 알림
+      if (saveRetryCountRef.current >= 3 || !isRetry) {
+        const errorMessage = error?.response?.data?.message || 'Failed to save after multiple attempts. Your content is still in the editor.';
+        alert(errorMessage);
+      }
     } finally {
       setIsSaving(false);
     }

@@ -221,23 +221,26 @@ export function Sidebar({
         const { active, over } = event;
 
         if (over && active.id !== over.id) {
-            setLocalPages((items) => {
-                const oldIndex = items.findIndex((item) => item.id === active.id);
-                const newIndex = items.findIndex((item) => item.id === over.id);
+            // Calculate new order outside of setState
+            const oldIndex = localPages.findIndex((item) => item.id === active.id);
+            const newIndex = localPages.findIndex((item) => item.id === over.id);
 
-                const newPages = arrayMove(items, oldIndex, newIndex);
+            const newPages = arrayMove(localPages, oldIndex, newIndex);
 
-                // Update sortOrder for reordered pages
-                const updatedPages = newPages.map((page, index) => ({
-                    ...page,
-                    sortOrder: index,
-                }));
+            // Update sortOrder for reordered pages
+            const updatedPages = newPages.map((page, index) => ({
+                ...page,
+                sortOrder: index,
+            }));
 
-                // Call the reorder callback
+            // Update local state
+            setLocalPages(updatedPages);
+
+            // Call the reorder callback after setState
+            // Use setTimeout to ensure it runs after the current render cycle
+            setTimeout(() => {
                 onReorderPages(updatedPages);
-
-                return updatedPages;
-            });
+            }, 0);
         }
     };
 
