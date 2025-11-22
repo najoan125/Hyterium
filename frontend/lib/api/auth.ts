@@ -2,6 +2,7 @@ import apiClient from "./client";
 import { User } from "../types";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8080";
+const FRONT_URL = process.env.BASE_URL || "http://localhost:3000";
 
 export const authApi = {
   async getCurrentUser(): Promise<User> {
@@ -15,7 +16,7 @@ export const authApi = {
 
   logout() {
     localStorage.removeItem("token");
-    window.location.href = "/auth/login";
+    window.location.href = `${FRONT_URL}/auth/login`;
   },
 
   setToken(token: string) {
