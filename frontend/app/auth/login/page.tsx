@@ -41,7 +41,7 @@ export default function LoginPage() {
             </svg>
           </div>
           <h1 className="text-3xl font-semibold text-gray-900 mb-2">
-            Notion Clone
+            Hyterium
           </h1>
           <p className="text-gray-500">
             Sign in to continue

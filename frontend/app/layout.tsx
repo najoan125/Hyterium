@@ -4,7 +4,7 @@ import "./globals.css";
 import { Providers } from "./providers";
 
 export const metadata: Metadata = {
-  title: "Notion Clone",
+  title: "Hyterium",
   description: "A collaborative workspace built with Next.js and Spring Boot",
 };
 

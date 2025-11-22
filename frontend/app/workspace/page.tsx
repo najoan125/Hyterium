@@ -82,7 +82,7 @@ export default function WorkspacePage() {
               <div className="w-8 h-8 bg-black dark:bg-white rounded-lg flex items-center justify-center shadow-sm">
                 <span className="text-white dark:text-black font-bold text-lg">N</span>
               </div>
-              <span className="text-sm font-semibold text-gray-900 dark:text-gray-100">Notion Clone</span>
+              <span className="text-sm font-semibold text-gray-900 dark:text-gray-100">Hyterium</span>
             </div>
             <div className="flex items-center gap-4">
               <Link
