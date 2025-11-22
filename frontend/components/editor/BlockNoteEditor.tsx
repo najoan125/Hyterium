@@ -181,6 +181,22 @@ export default function BlockNoteEditorComponent({
     }
   }, [pageId]);
 
+  // Save immediately (for keyboard shortcut)
+  const saveImmediately = useCallback(async () => {
+    if (!editor || !isEditorReady || isLoading || isInitialLoadRef.current) {
+      console.log('Cannot save - editor not ready');
+      return;
+    }
+
+    // Clear any pending auto-save
+    if (saveTimeoutRef.current) {
+      clearTimeout(saveTimeoutRef.current);
+    }
+
+    const content = editor.document;
+    await saveBlocks(content);
+  }, [editor, isEditorReady, isLoading, saveBlocks]);
+
   // Auto-save on editor changes
   const handleChange = useCallback(() => {
     // Don't save if editor is not ready or still loading
@@ -200,6 +216,22 @@ export default function BlockNoteEditorComponent({
       saveBlocks(content);
     }, 2000);
   }, [editor, isEditorReady, isLoading, saveBlocks]);
+
+  // Handle keyboard shortcuts
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      // Check for Cmd+S (Mac) or Ctrl+S (Windows/Linux)
+      if ((e.metaKey || e.ctrlKey) && e.key === 's') {
+        e.preventDefault(); // Prevent browser's default save dialog
+        saveImmediately();
+      }
+    };
+
+    document.addEventListener('keydown', handleKeyDown);
+    return () => {
+      document.removeEventListener('keydown', handleKeyDown);
+    };
+  }, [saveImmediately]);
 
   // Cleanup on unmount
   useEffect(() => {

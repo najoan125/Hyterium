@@ -10,6 +10,7 @@ import kr.najoan.notionclone.entity.WorkspaceRole
 import kr.najoan.notionclone.repository.InviteLinkRepository
 import kr.najoan.notionclone.repository.WorkspaceMemberRepository
 import kr.najoan.notionclone.repository.WorkspaceRepository
+import org.springframework.beans.factory.annotation.Value
 import org.springframework.stereotype.Service
 import org.springframework.transaction.annotation.Transactional
 import java.time.LocalDateTime
@@ -20,7 +21,9 @@ class InviteLinkService(
     private val inviteLinkRepository: InviteLinkRepository,
     private val workspaceRepository: WorkspaceRepository,
     private val workspaceMemberRepository: WorkspaceMemberRepository,
-    private val workspaceService: WorkspaceService
+    private val workspaceService: WorkspaceService,
+    @Value("\${base.url}")
+    private val baseUrl: String
 ) {
 
     fun createInviteLink(
@@ -133,6 +136,7 @@ class InviteLinkService(
         return InviteLinkDto(
             id = inviteLink.id!!,
             token = inviteLink.token,
+            url = "$baseUrl/invite/${inviteLink.token}",
             role = inviteLink.role,
             expiresAt = inviteLink.expiresAt?.toString(),
             isActive = inviteLink.isActive,

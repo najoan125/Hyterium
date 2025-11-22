@@ -53,7 +53,9 @@ export const workspaceApi = {
     workspaceId: number,
     data: { role?: string; expiresInDays?: number; maxUses?: number }
   ): Promise<InviteLink> {
+    console.log("Creating invite link with data:", data, "for workspace:", workspaceId);
     const response = await apiClient.post(`/workspaces/${workspaceId}/invites`, data);
+    console.log("Invite link response:", response.data);
     return response.data;
   },
 

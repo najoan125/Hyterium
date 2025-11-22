@@ -116,6 +116,7 @@ data class UpdateMemberRoleRequest(
 data class InviteLinkDto(
     val id: Long,
     val token: String,
+    val url: String,  // Full invite URL
     val role: WorkspaceRole,
     val expiresAt: String?,
     val isActive: Boolean,

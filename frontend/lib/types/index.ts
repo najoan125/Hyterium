@@ -59,6 +59,7 @@ export interface WorkspaceMember {
 export interface InviteLink {
   id: number;
   token: string;
+  url: string;
   role: WorkspaceRole;
   expiresAt?: string;
   isActive: boolean;
